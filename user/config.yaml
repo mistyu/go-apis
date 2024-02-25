@@ -1,5 +1,9 @@
 name: 'user'
 port: 8021
+
 user_srv:
   host: '127.0.0.1'
   port: 50051
+
+jwt:
+  key: '5$!UEmvB#nRB@Iwab#Sy!zofKEOGLRtE'

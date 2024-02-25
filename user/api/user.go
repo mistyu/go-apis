@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"go-apis/user/forms"
 	"go-apis/user/global"
 	"go-apis/user/global/response"
+	"go-apis/user/middlewares"
+	"go-apis/user/models"
 	"go-apis/user/proto"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -80,6 +83,9 @@ func GetUserList(ctx *gin.Context) {
 	if err != nil {
 		zap.S().Errorw("[GetUserList] 连接【用户服务失败】", "msg", err.Error())
 	}
+	claims, _ := ctx.Get("claims")
+	currentUser := claims.(*models.CustomClaims)
+	zap.S().Infof("访问用户: %d", currentUser.Id)
 	// 调用接口
 	userSrvClient := proto.NewUserClient(userConn)
 
@@ -155,8 +161,29 @@ func PasswordLogin(ctx *gin.Context) {
 			})
 		} else {
 			if passRsp.Success {
-				ctx.JSON(http.StatusOK, map[string]string{
-					"mobile": "登录成功",
+				// 生成token
+				j := middlewares.NewJWT()
+				claims := models.CustomClaims{
+					ID:          uint(rsp.Id),
+					NickName:    rsp.NickName,
+					AuthorityId: uint(rsp.Role),
+					StandardClaims: jwt.StandardClaims{
+						NotBefore: time.Now().Unix(),               // 签名的有效时间
+						ExpiresAt: time.Now().Unix() + 60*60*24*30, // 30天过期时间
+						Issuer:    "mistyu",
+					},
+				}
+				token, err := j.CreateToken(claims)
+				if err != nil {
+					ctx.JSON(http.StatusInternalServerError, gin.H{
+						"msg": "授权失败",
+					})
+				}
+				ctx.JSON(http.StatusOK, gin.H{
+					"id":         rsp.Id,
+					"nick_name":  rsp.NickName,
+					"token":      token,
+					"expired_at": (time.Now().Unix() + 60*60*24*30) * 1000,
 				})
 			} else {
 				ctx.JSON(http.StatusOK, map[string]string{
