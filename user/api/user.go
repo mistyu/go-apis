@@ -125,6 +125,12 @@ func PasswordLogin(ctx *gin.Context) {
 		return
 	}
 
+	if !store.Verify(passwordLoginForm.CaptchaId, passwordLoginForm.Captcha, true) {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"captcha": "验证码错误",
+		})
+	}
+
 	userConn, err := grpc.Dial(fmt.Sprintf("%s:%d", global.ServerConfig.UserSrvConfig.Host, global.ServerConfig.UserSrvConfig.Port))
 	if err != nil {
 		zap.S().Errorw("[GetUserList] 连接【用户服务失败】", "msg", err.Error())

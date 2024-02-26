@@ -12,5 +12,6 @@ func Routers() *gin.Engine {
 	Router.Use(middlewares.Cors())
 	ApiGroup := Router.Group("/user/v1")
 	userRouter.InitUserRouter(ApiGroup)
+	userRouter.InitBaseRouter(ApiGroup)
 	return Router
 }
