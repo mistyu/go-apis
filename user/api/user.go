@@ -7,6 +7,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/go-redis/redis/v8"
 	"go-apis/user/forms"
 	"go-apis/user/global"
 	"go-apis/user/global/response"
@@ -198,4 +199,71 @@ func PasswordLogin(ctx *gin.Context) {
 			}
 		}
 	}
+}
+
+func Register(ctx *gin.Context) {
+	// 用户注册
+	registerForm := forms.RegisterForm{}
+	if err := ctx.ShouldBind(&registerForm); err != nil {
+		HandleValidatorError(ctx, err)
+		return
+	}
+
+	// 验证码校验
+	rdb := redis.NewClient(&redis.Options{
+		Addr: fmt.Sprintf("%s:%d", global.ServerConfig.RedisInfo.Host, global.ServerConfig.RedisInfo.Port),
+	})
+	value, err := rdb.Get(context.Background(), registerForm.Mobile).Result()
+	if err == redis.Nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"code": "验证码错误",
+		})
+		return
+	} else {
+		if value != registerForm.Code {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"code": "验证码错误",
+			})
+			return
+		}
+	}
+	userConn, err := grpc.Dial(fmt.Sprintf("%s:%d", global.ServerConfig.UserSrvConfig.Host, global.ServerConfig.UserSrvConfig.Port))
+	if err != nil {
+		zap.S().Errorw("[GetUserList] 连接【用户服务失败】", "msg", err.Error())
+	}
+	// 调用接口
+	userSrvClient := proto.NewUserClient(userConn)
+	user, err := userSrvClient.CreateUser(context.Background(), &proto.CreateUserInfo{
+		NickName: registerForm.Mobile,
+		PassWord: registerForm.PassWord,
+		Mobile:   registerForm.Mobile,
+	})
+	if err != nil {
+		zap.S().Errorf("[Register] 创建【用户】失败: %s", err.Error())
+		HandleGrpcErrorToHttp(err, ctx)
+		return
+	}
+	j := middlewares.NewJWT()
+	claims := models.CustomClaims{
+		ID:          uint(user.Id),
+		NickName:    user.NickName,
+		AuthorityId: uint(user.Role),
+		StandardClaims: jwt.StandardClaims{
+			NotBefore: time.Now().Unix(),               // 签名的有效时间
+			ExpiresAt: time.Now().Unix() + 60*60*24*30, // 30天过期时间
+			Issuer:    "mistyu",
+		},
+	}
+	token, err := j.CreateToken(claims)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"msg": "授权失败",
+		})
+	}
+	ctx.JSON(http.StatusOK, gin.H{
+		"id":         user.Id,
+		"nick_name":  user.NickName,
+		"token":      token,
+		"expired_at": (time.Now().Unix() + 60*60*24*30) * 1000,
+	})
 }
