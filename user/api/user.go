@@ -15,7 +15,6 @@ import (
 	"go-apis/user/models"
 	"go-apis/user/proto"
 	"go.uber.org/zap"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"net/http"
@@ -79,22 +78,16 @@ func HandleGrpcErrorToHttp(err error, c *gin.Context) {
 
 // GetUserList 获取用户列表
 func GetUserList(ctx *gin.Context) {
-	// 拨号连接用户grpc服务器
-	userConn, err := grpc.Dial(fmt.Sprintf("%s:%d", global.ServerConfig.UserSrvConfig.Host, global.ServerConfig.UserSrvConfig.Port))
-	if err != nil {
-		zap.S().Errorw("[GetUserList] 连接【用户服务失败】", "msg", err.Error())
-	}
+
 	claims, _ := ctx.Get("claims")
 	currentUser := claims.(*models.CustomClaims)
 	zap.S().Infof("访问用户: %d", currentUser.Id)
-	// 调用接口
-	userSrvClient := proto.NewUserClient(userConn)
 
 	pn := ctx.DefaultQuery("pn", "0")
 	pnInt, _ := strconv.Atoi(pn)
 	pSize := ctx.DefaultQuery("pSize", "10")
 	pSizeInt, _ := strconv.Atoi(pSize)
-	rsp, err := userSrvClient.GetUserList(context.Background(), &proto.PageInfo{Pn: uint32(pnInt), PSize: uint32(pSizeInt)})
+	rsp, err := global.UserServerClient.GetUserList(context.Background(), &proto.PageInfo{Pn: uint32(pnInt), PSize: uint32(pSizeInt)})
 	if err != nil {
 		zap.S().Errorw("[GetUserList] 查询【用户列表】失败")
 		HandleGrpcErrorToHttp(err, ctx)
@@ -132,15 +125,8 @@ func PasswordLogin(ctx *gin.Context) {
 		})
 	}
 
-	userConn, err := grpc.Dial(fmt.Sprintf("%s:%d", global.ServerConfig.UserSrvConfig.Host, global.ServerConfig.UserSrvConfig.Port))
-	if err != nil {
-		zap.S().Errorw("[GetUserList] 连接【用户服务失败】", "msg", err.Error())
-	}
-	// 调用接口
-	userSrvClient := proto.NewUserClient(userConn)
-
 	// 登录
-	if rsp, err := userSrvClient.GetUserByMobile(context.Background(), &proto.MobileRequest{
+	if rsp, err := global.UserServerClient.GetUserByMobile(context.Background(), &proto.MobileRequest{
 		Mobile: passwordLoginForm.Mobile,
 	}); err != nil {
 		if e, ok := status.FromError(err); ok {
@@ -159,7 +145,7 @@ func PasswordLogin(ctx *gin.Context) {
 		}
 	} else {
 		// 检查到了用户
-		if passRsp, passErr := userSrvClient.CheckPassWord(context.Background(), &proto.PasswordCheckInfo{
+		if passRsp, passErr := global.UserServerClient.CheckPassWord(context.Background(), &proto.PasswordCheckInfo{
 			Password:          passwordLoginForm.PassWord,
 			EncryptedPassword: rsp.Password,
 		}); passErr != nil {
@@ -227,13 +213,7 @@ func Register(ctx *gin.Context) {
 			return
 		}
 	}
-	userConn, err := grpc.Dial(fmt.Sprintf("%s:%d", global.ServerConfig.UserSrvConfig.Host, global.ServerConfig.UserSrvConfig.Port))
-	if err != nil {
-		zap.S().Errorw("[GetUserList] 连接【用户服务失败】", "msg", err.Error())
-	}
-	// 调用接口
-	userSrvClient := proto.NewUserClient(userConn)
-	user, err := userSrvClient.CreateUser(context.Background(), &proto.CreateUserInfo{
+	user, err := global.UserServerClient.CreateUser(context.Background(), &proto.CreateUserInfo{
 		NickName: registerForm.Mobile,
 		PassWord: registerForm.PassWord,
 		Mobile:   registerForm.Mobile,

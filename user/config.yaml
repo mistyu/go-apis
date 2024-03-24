@@ -4,6 +4,7 @@ port: 8021
 user_srv:
   host: '127.0.0.1'
   port: 50051
+  name: 'user-server'
 
 jwt:
   key: '5$!UEmvB#nRB@Iwab#Sy!zofKEOGLRtE'
@@ -14,5 +15,9 @@ sms:
   expire: 300
 
 redis:
-  host: '192.168.1.103'
+  host: '192.168.1.3'
   port: 6379
+
+consul:
+  host: '192.168.1.3'
+  port: 8500

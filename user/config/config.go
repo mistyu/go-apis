@@ -3,6 +3,7 @@ package config
 type UserSrvConfig struct {
 	Host string `mapstructure:"host"`
 	Port int    `mapstructure:"port"`
+	Name string `mapstructure:"name"`
 }
 
 type JWTConfig struct {
